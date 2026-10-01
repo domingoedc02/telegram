@@ -13,6 +13,7 @@
     "lint": "eslint .",
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
+    "verify": "pnpm install --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm build && pnpm test",
     "db:generate": "pnpm --filter server run db:generate",
     "db:migrate": "pnpm --filter server run db:migrate",
     "prepare": "husky"

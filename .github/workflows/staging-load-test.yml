@@ -1,28 +1,27 @@
 name: Staging load test
 
-# Fires after CI's deploy-staging job has actually redeployed tg-staging on a
-# merge to main (spec/operations CI/CD stage 10) — not on every push to a
-# feature branch, to keep PR CI fast. Its result is a manual go/no-go input to
-# cutting the next v* tag (team lead/PM decide), not an automatic block on main.
+# Per the client's decision (decision/no-github-actions, 2026-10-01): GitHub
+# Actions is not used for CI or deploy, so this no longer fires after a CI
+# run (there is no auto-triggering CI run to fire after). The workflow is
+# kept in the repo and may still be run by hand (Actions tab -> "Run
+# workflow") against a real tg-staging URL if that's ever useful.
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      staging_url:
+        description: 'tg-staging base URL to soak-test'
+        required: false
+        default: 'https://staging-chat.acme.com'
 
 permissions:
   contents: read
 
-env:
-  STAGING_URL: https://staging-chat.acme.com
-
 jobs:
   load-test:
     name: k6 soak against tg-staging
-    if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
+    env:
+      STAGING_URL: ${{ inputs.staging_url }}
     steps:
       - uses: actions/checkout@v4
 
