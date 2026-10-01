@@ -147,6 +147,60 @@ describe('createWsClient', () => {
     expect(client.getHighestSeq()).toBe(45);
   });
 
+  it('ignores a stale fetchSync resolution after the socket has already closed, so the backoff counter is not reset (regression, PR #19 review)', async () => {
+    let resolveFirstSync:
+      | ((value: { messages: never[]; meta: { nextCursor: null; hasMore: boolean } }) => void)
+      | undefined;
+    fetchSync.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFirstSync = resolve;
+        }),
+    );
+    // The second attempt's backfill is left pending forever — irrelevant
+    // here; it's the first (stale) one's effect on state/attempt under test.
+    fetchSync.mockImplementationOnce(() => new Promise(() => undefined));
+
+    vi.useFakeTimers();
+    const client = makeClient();
+    client.connect();
+
+    const socket1 = sockets[0]!;
+    socket1.emit('open', {});
+    expect(client.getState()).toBe('syncing');
+
+    // Closes before fetchSync(0) resolves — this is the race: close() runs
+    // handleCloseOrError synchronously (state -> 'closed', attempt 0 -> 1,
+    // first reconnect scheduled at ~500ms) *before* the pending fetchSync
+    // promise below ever settles.
+    socket1.emit('close', {});
+    expect(client.getState()).toBe('closed');
+
+    // The stale backfill resolves now. Without the staleness guard, this
+    // resurrects state to 'open' and resets the backoff attempt counter to 0.
+    resolveFirstSync?.({ messages: [], meta: { nextCursor: null, hasMore: false } });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(client.getState()).toBe('closed');
+
+    // The first reconnect (scheduled while attempt was 0, i.e. ~500ms ±20%)
+    // fires and opens a second socket.
+    await vi.advanceTimersByTimeAsync(650);
+    expect(sockets).toHaveLength(2);
+
+    const socket2 = sockets[1]!;
+    socket2.emit('open', {});
+    socket2.emit('close', {}); // closes again immediately, before its own fetchSync resolves
+
+    // If the stale resolution above had wrongly reset attempt to 0, this
+    // second reconnect would also fire at ~500ms. With the fix intact,
+    // attempt is correctly 1 at this point, so it must wait ~1000ms instead
+    // — the backoff actually grows, rather than being defeated.
+    await vi.advanceTimersByTimeAsync(650);
+    expect(sockets).toHaveLength(2); // not yet — proves the counter was not reset to 0
+    await vi.advanceTimersByTimeAsync(600);
+    expect(sockets).toHaveLength(3);
+  });
+
   it('drops a frame that fails envelope validation without crashing', async () => {
     const client = makeClient();
     const handler = vi.fn();

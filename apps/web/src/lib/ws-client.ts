@@ -142,10 +142,22 @@ export function createWsClient(options: WsClientOptions = {}): WsClient {
   }
 
   function handleOpen(): void {
+    // Captured now, compared against the live `socket` binding once the
+    // async fetchSync below settles: if this socket has since closed (or
+    // been superseded by a newer connect/reconnect), `socket` will no longer
+    // be `openedSocket` by the time either callback runs. Without this guard
+    // a stale resolution/rejection — arriving *after* handleCloseOrError has
+    // already moved state to 'closed' and scheduled a backoff reconnect —
+    // would overwrite state back to 'open' and reset `attempt` to 0,
+    // silently defeating the backoff (found in PR #19 review on TG-11).
+    const openedSocket = socket;
     state = 'syncing';
     const afterSeq = highestSeq;
     fetchSync(afterSeq)
       .then((result) => {
+        if (socket !== openedSocket) {
+          return;
+        }
         for (const message of result.messages) {
           dispatch({ type: 'message:new', payload: { message } });
         }
@@ -159,6 +171,9 @@ export function createWsClient(options: WsClientOptions = {}): WsClient {
         attempt = 0;
       })
       .catch(() => {
+        if (socket !== openedSocket) {
+          return;
+        }
         // A failed backfill leaves the socket open but un-synced; the next
         // scheduled reconnect (triggered by the eventual close/error, or a
         // manual retry) will try again. Buffered live frames are kept so a
@@ -190,6 +205,12 @@ export function createWsClient(options: WsClientOptions = {}): WsClient {
 
   function handleCloseOrError(): void {
     socket = null;
+    // Any frames buffered while this (now-dead) socket's own sync was in
+    // flight belong to a connection that no longer exists; the next
+    // connection's own `/sync?after=` call will recover anything genuinely
+    // missed, so holding onto them would only risk replaying them into an
+    // unrelated future sync window.
+    bufferedFrames.length = 0;
     if (manuallyClosed) {
       state = 'closed';
       return;
