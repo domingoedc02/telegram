@@ -1,12 +1,18 @@
 name: CI
 
-# Per the client's decision (decision/no-github-actions, 2026-10-01): GitHub
-# Actions is not used for CI or deploy — every PR's quality gate is run
-# locally by the author and re-run locally by the reviewer (see
-# ops/runbooks/local-verification.md). This workflow is kept in the repo,
-# disabled from auto-triggering, and may still be run by hand (Actions tab ->
-# "Run workflow") if GitHub Actions becomes usable again later.
+# Revised 2026-10-01: decision/no-github-actions is superseded — the client's
+# GitHub billing issue is fixed, so GitHub Actions CI is back on. Triggers run
+# on every push/PR to main and on a v* tag, exactly as originally designed;
+# workflow_dispatch stays as an extra, manual trigger. The local pnpm verify
+# gate (ops/runbooks/local-verification.md) stays in place too — a green
+# Actions run is now required in ADDITION to local verification before
+# merging, not instead of it.
 on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
   workflow_dispatch: {}
 
 permissions:
@@ -254,11 +260,16 @@ jobs:
           cache-to: type=gha,mode=max
 
   # Real job: auto-deploys tg-staging on every merge to main (answer/environments-ci).
-  # Waits on TG-8 for the tg-staging Dokploy application and its webhook contract to
-  # exist (sequencing dependency) — not on any open scope decision.
+  # Gated on the repo *variable* `DOKPLOY_STAGING_READY` (not a secret — job-level
+  # `if:` can only see the `vars` context, not `secrets`, per GitHub's own context
+  # availability rules) so the run stays green (skipped, not failed) until TG-8
+  # supplies the real Dokploy secrets and a human flips this variable to "true" —
+  # see ops/runbooks/ci-pipeline-setup.md for exactly what to add and when.
   deploy-staging:
     name: Deploy to staging
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      vars.DOKPLOY_STAGING_READY == 'true'
     needs: push
     runs-on: ubuntu-latest
     environment: staging
@@ -274,10 +285,12 @@ jobs:
           DOKPLOY_API_TOKEN: ${{ secrets.DOKPLOY_API_TOKEN }}
 
   # Real job: gated by the "production" GitHub Environment's required reviewers
-  # (manual approval, configured once in repo Settings -> Environments, see Setup & config).
+  # (manual approval, configured once in repo Settings -> Environments, see
+  # Setup & config) AND by the repo variable `DOKPLOY_PROD_READY`, same
+  # reasoning as deploy-staging above.
   deploy-prod:
     name: Deploy to production
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') && vars.DOKPLOY_PROD_READY == 'true'
     needs: push
     runs-on: ubuntu-latest
     environment: production

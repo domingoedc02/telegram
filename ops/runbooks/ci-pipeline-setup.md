@@ -1,13 +1,15 @@
 # CI pipeline setup (one-time, needs repo admin)
 
-The workflows in `.github/workflows/` run as soon as they land on `main` — no
-setup needed for `install`/`lint`/`typecheck`/`test`/`build`. The steps below
-need repo-admin access this agent does not have (`repos.create`/`repos.list`
-tokens are scoped to ORBIT's webhook integration, not GitHub repo settings),
-so a human with admin on `domingoedc02/telegram` must do them. None of this
-blocks TG-6 from being reviewed and merged — it blocks the `scan`/`push`/
-`deploy-*` jobs from running green, and `deploy-staging`/`deploy-prod` further
-depend on TG-8 standing up the `tg-staging`/`tg-prod` Dokploy applications.
+The workflows in `.github/workflows/` run automatically on pushes to `main`,
+pull requests targeting `main`, and `v*` tags; `workflow_dispatch` is also
+available for manual runs. No repository setup is needed for
+`install`/`lint`/`typecheck`/`test`/`build`. The steps below need repo-admin
+access this agent does not have (`repos.create`/`repos.list` tokens are scoped
+to ORBIT's webhook integration, not GitHub repo settings), so a human with
+admin on `domingoedc02/telegram` must do them. The `scan` and `push` jobs run
+as part of the normal pipeline once the Dockerfile is present. The deploy jobs
+remain skipped until TG-8 stands up the `tg-staging`/`tg-prod` Dokploy
+applications and a human sets the corresponding readiness variables.
 
 ## 1. Branch protection on `main`
 
@@ -29,12 +31,12 @@ GitHub repo-admin scope, only push/PR access.
 
 ## 2. Repository secrets (Settings → Secrets and variables → Actions)
 
-| Secret | Used by | Source |
-|---|---|---|
-| `DOKPLOY_URL` | `deploy-staging`, `deploy-prod` | TG-8's Dokploy instance base URL |
-| `DOKPLOY_STAGING_APP_ID` | `deploy-staging` | TG-8, once the `tg-staging` Dokploy application exists |
-| `DOKPLOY_PROD_APP_ID` | `deploy-prod` | TG-8, once the `tg-prod` Dokploy application exists |
-| `DOKPLOY_API_TOKEN` | both | Dokploy's own API token, scoped to deploy-webhook calls only if Dokploy supports scoping |
+| Secret                   | Used by                         | Source                                                                                   |
+| ------------------------ | ------------------------------- | ---------------------------------------------------------------------------------------- |
+| `DOKPLOY_URL`            | `deploy-staging`, `deploy-prod` | TG-8's Dokploy instance base URL                                                         |
+| `DOKPLOY_STAGING_APP_ID` | `deploy-staging`                | TG-8, once the `tg-staging` Dokploy application exists                                   |
+| `DOKPLOY_PROD_APP_ID`    | `deploy-prod`                   | TG-8, once the `tg-prod` Dokploy application exists                                      |
+| `DOKPLOY_API_TOKEN`      | both                            | Dokploy's own API token, scoped to deploy-webhook calls only if Dokploy supports scoping |
 
 `GITHUB_TOKEN` needs no setup — GitHub injects it per-run, scoped by this
 workflow's own `permissions: contents: read, packages: write` block.
@@ -63,17 +65,19 @@ pushed that Settings → Packages shows it linked to this repo.
 
 ## 5. Verifying the pipeline end-to-end
 
-Once TG-4 is merged (root scripts + lockfile) and this issue's branch is
-merged:
+After this branch is merged:
 
-1. Open a throwaway PR touching any file — confirm `Lint`/`Typecheck`/`Test`/
-   `Build` all run and report status on the PR.
-2. Once TG-8 lands `infra/docker/Dockerfile.app` and the `tg-staging`/
-   `tg-prod` Dokploy apps + secrets above exist, merge a PR to `main` and
-   confirm `build-image` → `scan` → `push` → `deploy-staging` all go green
-   and `tg-staging` actually redeploys.
-3. Confirm `staging-load-test.yml` fires after that deploy (Actions tab,
-   "Staging load test" workflow) once TG-16 lands `infra/loadtest/soak.js`.
+1. Push a small follow-up or open a throwaway PR — confirm `Lint`/`Typecheck`/
+   `Test`/`Build` all run and report status. The Docker image build and scan
+   also run when `infra/docker/Dockerfile.app` is present.
+2. Once TG-8 lands the real Dockerfile and the `tg-staging`/`tg-prod` Dokploy
+   apps plus secrets above exist, set `DOKPLOY_STAGING_READY=true` and/or
+   `DOKPLOY_PROD_READY=true` as repository variables. Merge to `main` and
+   confirm `build-image` → `scan` → `push` → `deploy-staging` all go green and
+   `tg-staging` actually redeploys.
+3. Run `staging-load-test.yml` manually once staging exists and TG-16 lands
+   `infra/loadtest/soak.js`; supply the real staging URL as the required
+   `staging_url` input (the workflow has no placeholder host).
 4. Tag a `v0.0.1` test release and confirm `deploy-prod` pauses for manual
    approval in the `production` environment rather than running unattended.
 

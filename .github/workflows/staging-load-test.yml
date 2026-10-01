@@ -1,17 +1,15 @@
 name: Staging load test
 
-# Per the client's decision (decision/no-github-actions, 2026-10-01): GitHub
-# Actions is not used for CI or deploy, so this no longer fires after a CI
-# run (there is no auto-triggering CI run to fire after). The workflow is
-# kept in the repo and may still be run by hand (Actions tab -> "Run
-# workflow") against a real tg-staging URL if that's ever useful.
+# GitHub Actions CI is enabled again after the billing issue was fixed. This
+# workflow remains manual until TG-8 provides a real tg-staging deployment and
+# TG-16 provides infra/loadtest/soak.js; CI does not claim staging exists before
+# those implementation issues land.
 on:
   workflow_dispatch:
     inputs:
       staging_url:
-        description: 'tg-staging base URL to soak-test'
-        required: false
-        default: 'https://staging-chat.acme.com'
+        description: 'tg-staging base URL to soak-test (set this when staging exists)'
+        required: true
 
 permissions:
   contents: read

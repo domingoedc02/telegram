@@ -1,18 +1,17 @@
-# Local verification (replaces GitHub Actions CI)
+# Local verification (required alongside GitHub Actions CI)
 
-Per the client's decision (`decision/no-github-actions`, 2026-10-01): GitHub
-Actions is not used for CI or deploy on this repo. GitHub Actions jobs on
-`domingoedc02/telegram` never actually ran anyway — the account is billing-locked
-(see the TG-6 comment history) — but the client's instruction is independent of
-that: _"No need to use CI/CD of GitHub, just test it locally and push in
-GitHub."_ `.github/workflows/ci.yml` and `.github/workflows/staging-load-test.yml`
-stay in the repo (useful as documentation of the pipeline shape, and runnable
-by hand later if Actions ever becomes usable), but are `workflow_dispatch`-only
-— nothing auto-triggers on push, PR, or tag.
+The client's later decision (`decision/no-github-actions`, superseded
+2026-10-01) restored automatic GitHub Actions after the billing issue was
+fixed. `.github/workflows/ci.yml` now runs on pushes to `main`, pull requests
+targeting `main`, and `v*` tags, with `workflow_dispatch` retained for manual
+runs. The staging load-test workflow remains manual until TG-8 provides a real
+staging deployment and TG-16 provides the load-test script.
 
-**The quality gate moved from "GitHub Actions is green" to "a human ran these
-commands locally and they were green."** This is now what `spec/conventions`'
-"CI green" merge-gate item means.
+**Local verification remains a required pre-push gate, and GitHub Actions is a
+second merge gate.** The author runs the commands below before opening or
+updating a PR; the reviewer reruns them before approving. A green Actions run
+must also be present before merge. This protects development when Actions is
+unavailable and keeps the local feedback loop fast.
 
 ## 1. Before opening or updating a PR (the author's job)
 
@@ -47,7 +46,8 @@ report alone.
 
 ## 3. Image vulnerability scan (local, replaces the old `scan` CI job)
 
-Once `infra/docker/Dockerfile.app` exists (TG-8):
+The current `infra/docker/Dockerfile.app` is a temporary CI image definition; TG-8
+must replace it with the production Dokploy runtime image before deployment:
 
 ```
 docker buildx build -t tg-app:local -f infra/docker/Dockerfile.app .

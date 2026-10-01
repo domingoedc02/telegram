@@ -168,7 +168,7 @@ Before go-live, a deployer verifies (full checklist `spec/security`): WS upgrade
 
 **Environments:** local (dev compose); **staging — committed for MVP** (`answer/environments-ci`), a second Dokploy stack, own Postgres/Redis + subdomain, synthetic data only, redeployed from `main` after local checks pass; prod (`chat.<client-domain>`, real data, single `app` replica, accepted SPOF), deploys only from a tagged release after manual approval.
 
-**CI/CD:** **GitHub Actions is not used** (`decision/no-github-actions` — billing-locked; client confirmed local-only is fine). Every PR's gate is local: install → lint → typecheck → build → test (+ integration vs. the local compose stack), run by author and reviewer, pasted into the PR body — never waiting on a GitHub check. `ci.yml`/`staging-load-test.yml` (TG-6) stay as manual (`workflow_dispatch`) references only; scan (`trivy`/`pnpm audit`) and the k6 load test (50 VUs, p95<500ms/<1% error) run manually pre-release.
+**CI/CD:** GitHub Actions runs the TG-6 pipeline automatically on pushes to `main`, pull requests targeting `main`, and `v*` tags; `workflow_dispatch` remains available for manual runs. The pipeline performs install → lint → typecheck → test (with Postgres/Redis services) → build → image build → Trivy and `pnpm audit` scan → GHCR push. Dokploy deploy jobs stay skipped until TG-8 supplies the app targets and the `DOKPLOY_*_READY` repository variables. Local `pnpm verify` remains mandatory before every push and must be rerun by the reviewer; a green Actions run is an additional merge gate. The staging k6 load test stays manual until staging exists and TG-16 provides `infra/loadtest/soak.js`.
 
 **Deploy/rollback:** entrypoint runs `db:migrate` before serving (failure → previous container kept). `/healthz`/`/readyz` gate Traefik routing. Rollback = redeploy previous image, safe only if additive; re-verify after.
 
@@ -188,7 +188,7 @@ Definition of Done (`spec/testing`): every AC maps to a named test; ≥80% serve
 
 **Branching/commits:** trunk-based `main`, one branch per issue (`tg-<issue-number>-<slug>`); Conventional Commits via commitlint+Husky; squash merge only; never force-push `main`.
 
-**Code review:** exactly one reviewer, never the author; `security`-labelled issues also need `security-eng`. Gate: local checks green (author+reviewer both run install/lint/typecheck/build/test — no GitHub Actions, `decision/no-github-actions`), ≥1 non-author approval, no unresolved comments, rebased. Checklist: AC match, no `any` widening, zod at every boundary, explicit error handling, no secrets/PII, happy+failure tests, additive migrations.
+**Code review:** exactly one reviewer, never the author; `security`-labelled issues also need `security-eng`. Gate: local checks green (author+reviewer both run install/lint/typecheck/build/test), a green TG-6 GitHub Actions run, ≥1 non-author approval, no unresolved comments, rebased. Checklist: AC match, no `any` widening, zod at every boundary, explicit error handling, no secrets/PII, happy+failure tests, additive migrations.
 
 **Definition of Ready:** plan approved by every planner but its author; active sprint; estimated; assignee+reviewer set; Given/When/Then ACs; dependencies sequenced; subtasks ≤1 day.
 
