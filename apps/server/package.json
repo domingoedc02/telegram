@@ -1,0 +1,25 @@
+{
+  "name": "@tg/server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.json --outDir dist",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"no tests yet\" && exit 0",
+    "db:generate": "echo \"db:generate: wired in TG-2 (database schema & migrations)\" && exit 0",
+    "db:migrate": "echo \"db:migrate: wired in TG-2 (database schema & migrations)\" && exit 0",
+    "db:migrate:down": "echo \"db:migrate:down: wired in TG-2 (database schema & migrations)\" && exit 0",
+    "bootstrap:admin": "echo \"bootstrap:admin: wired in TG-2 (database schema & migrations)\" && exit 0",
+    "seed:demo": "echo \"seed:demo: wired in TG-2 (database schema & migrations)\" && exit 0"
+  },
+  "dependencies": {
+    "@tg/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3"
+  }
+}
