@@ -7,18 +7,23 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "echo \"no tests yet\" && exit 0"
+    "test": "vitest run"
   },
   "dependencies": {
     "@tg/shared": "workspace:*",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.0.1"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.2",
+    "@testing-library/react": "^16.0.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.2",
+    "jsdom": "^25.0.1",
     "typescript": "^5.6.3",
-    "vite": "^6.0.1"
+    "vite": "^6.0.1",
+    "vitest": "^2.1.4"
   }
 }

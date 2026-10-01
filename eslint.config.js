@@ -23,7 +23,14 @@ export default tseslint.config(
     extends: [...tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       parserOptions: {
-        projectService: true,
+        projectService: {
+          // Vitest/Vite config files aren't listed in any package's tsconfig
+          // "include" (vite.config.ts is the one exception, added explicitly
+          // in apps/web/tsconfig.json so it gets full type-aware linting);
+          // fall back to TS's single-file "default project" for the rest
+          // rather than erroring on "not found by the project service".
+          allowDefaultProject: ['packages/*/vitest.config.ts'],
+        },
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -75,6 +82,17 @@ export default tseslint.config(
     files: ['apps/server/**/*.ts'],
     rules: {
       'no-console': 'error',
+    },
+  },
+  {
+    // spec/conventions: "no non-null assertions (!) outside test files
+    // without the same justification pattern" — test files are the one
+    // place `!` needs no inline justification comment (fixture/array-index
+    // access is routine there, and a wrong assumption just fails the test
+    // loudly rather than hiding a real bug).
+    files: ['**/*.test.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-non-null-assertion': 'off',
     },
   },
   {
