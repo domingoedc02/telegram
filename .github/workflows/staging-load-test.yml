@@ -1,0 +1,53 @@
+name: Staging load test
+
+# Fires after CI's deploy-staging job has actually redeployed tg-staging on a
+# merge to main (spec/operations CI/CD stage 10) — not on every push to a
+# feature branch, to keep PR CI fast. Its result is a manual go/no-go input to
+# cutting the next v* tag (team lead/PM decide), not an automatic block on main.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  STAGING_URL: https://staging-chat.acme.com
+
+jobs:
+  load-test:
+    name: k6 soak against tg-staging
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for tg-staging to report ready
+        run: |
+          for i in $(seq 1 30); do
+            if curl --fail --silent "${STAGING_URL}/readyz"; then
+              echo "tg-staging is ready"
+              exit 0
+            fi
+            echo "Waiting for tg-staging readiness ($i/30)..."
+            sleep 10
+          done
+          echo "tg-staging did not become ready in time" >&2
+          exit 1
+
+      - name: Install k6
+        run: |
+          curl -s https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install -y k6
+
+      # infra/loadtest/soak.js is authored alongside TG-16 (real-time messaging),
+      # since its thresholds (p95<500ms, WS error rate <1%) encode that story's
+      # own NFRs. This job only wires the trigger/gate around it.
+      - name: Run k6 soak (50 VUs, 10 min)
+        run: k6 run infra/loadtest/soak.js --env TARGET="${STAGING_URL}"
